@@ -1,0 +1,137 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Silent Emergency Support</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- WELCOME -->
+<div id="screen-welcome" class="screen">
+  <div class="card">
+    <h2>Silent Emergency Support</h2>
+    <div class="cloud">🙂</div>
+    <p class="center">A quiet space to communicate during emergencies.</p>
+    <button onclick="show('screen-details1')">Get Started</button>
+  </div>
+</div>
+
+<!-- DETAILS 1 -->
+<div id="screen-details1" class="screen hidden">
+  <div class="card">
+    <h3>User Details</h3>
+    <input id="fullName" placeholder="Full Name *">
+    <input 
+  id="mobileNumber"
+  type="tel"
+  placeholder="Mobile Number *"
+  maxlength="10"
+  pattern="[0-9]{10}"
+  inputmode="numeric"
+>
+
+    <input 
+  id="age"
+  type="number"
+  placeholder="Age *"
+  min="1"
+  max="120"
+>
+
+    <select>
+      <option value="">Select Gender *</option>
+      <option>Female</option>
+      <option>Male</option>
+      <option>Other</option>
+    </select>
+    <input placeholder="Blood Group (optional)">
+    <textarea id="medicalInfo" placeholder="Any medication (optional)"></textarea>
+    <button onclick="validateUserDetails()">Next</button>
+
+  </div>
+</div>
+
+<!-- DETAILS 2 -->
+<div id="screen-details2" class="screen hidden">
+  <div class="card">
+    <h3>Emergency Contacts</h3>
+    <input id="ec1" placeholder="Emergency Contact 1 *" maxlength="10">
+<input id="ec2" placeholder="Emergency Contact 2" maxlength="10">
+<input id="ec3" placeholder="Emergency Contact 3" maxlength="10">
+
+    <button onclick="validateEmergencyContacts()">Send OTP</button>
+
+  </div>
+</div>
+
+<!-- OTP -->
+<div id="screen-otp" class="screen hidden">
+  <div class="card">
+    <h3>OTP Verification</h3>
+    <input 
+  id="otp"
+  type="tel"
+  maxlength="4"
+  inputmode="numeric"
+  placeholder="Enter 4-digit OTP"
+>
+
+    <p class="hint">Demo OTP: <b>1234</b></p>
+    <button onclick="verifyOTP()">Verify</button>
+  </div>
+</div>
+
+<!-- TERMS -->
+<div id="screen-terms" class="screen hidden">
+  <div class="card">
+    <h3>Terms & Conditions</h3>
+    <ul class="terms">
+  <li><b>Location</b> may be shared during emergencies to request help.</li>
+  <li><b>SOS alerts</b> may be sent to emergency contacts.</li>
+  <li><b>Authorities</b> (police, fire, medical, disaster response) may be contacted when risk is critical.</li>
+  <li><b>Silent Mode</b> may be activated during high-risk situations (e.g., kidnapping or stalking).</li>
+  <li><b>Screen Brightness</b> may be reduced to avoid drawing attention in silent emergencies.</li>
+  <li><b>Do Not Disturb (DND)</b> may be enabled in the mobile app version with user permission.</li>
+  <li>Emergency actions may be triggered automatically if there is no response during critical situations.</li>
+  <li>False claims or misuse are the <b>user’s responsibility</b>.</li>
+</ul>
+
+    <label style="display:block; margin:10px 0;">
+  <input type="checkbox" id="agreeCheck">
+  I have read and agree to the Terms & Conditions
+</label>
+
+<button onclick="acceptTerms()">Agree & Continue</button>
+
+  </div>
+</div>
+
+<!-- APP -->
+<div id="screen-app" class="screen hidden">
+  <div class="app">
+    <div class="header">Silent Emergency Support</div>
+    <div id="cloud" class="cloud">🙂</div>
+    <div id="status" class="status safe">SAFE MODE</div>
+    <div id="chat" class="chat"></div>
+    <div class="input-area">
+      <button class="mic" onclick="startListening()">🎤</button>
+      <input id="chatInput" placeholder="Type or speak quietly…">
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRMATION DIALOG -->
+<div id="confirmBox" class="overlay hidden" style="display:none;">
+  <div class="dialog-box">
+    <p id="confirmText"></p>
+    <div class="dialog-actions">
+      <button onclick="confirmEmergency()">OK</button>
+      <button onclick="cancelEmergency()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html> 

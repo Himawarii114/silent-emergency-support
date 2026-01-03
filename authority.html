@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Authority Dashboard</title>
+</head>
+<body style="background:#020617;color:#fff;font-family:Arial">
+
+  <h2>🚓 Emergency Authority Dashboard</h2>
+  <p>This device simulates Police / Fire / Medical / Disaster Management</p>
+
+  <div id="log"></div>
+
+  <script>
+    const channel = new BroadcastChannel("emergency_channel");
+
+    channel.onmessage = (event) => {
+      const d = event.data;
+
+      document.getElementById("log").innerHTML += `
+        <div style="border:1px solid #334155;padding:10px;margin:10px;border-radius:8px">
+          <b>🚨 Emergency:</b> ${d.emergencyType}<br>
+          <b>👤 Name:</b> ${d.name}<br>
+          <b>📍 Location:</b> ${d.location}<br>
+          <b>🎂 Age:</b> ${d.age}<br>
+          <b>🩺 Medical:</b> ${d.medical || "None"}<br>
+
+          <b>⚠️ Risk Score:</b> ${d.riskScore}<br>
+          <b>🕒 Time:</b> ${d.time}
+        </div>
+      `;
+    };
+  </script>
+
+</body>
+</html>
