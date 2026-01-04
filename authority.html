@@ -3,34 +3,110 @@
 <head>
   <meta charset="UTF-8">
   <title>Authority Dashboard</title>
+  <link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 </head>
 <body style="background:#020617;color:#fff;font-family:Arial">
 
   <h2>🚓 Emergency Authority Dashboard</h2>
   <p>This device simulates Police / Fire / Medical / Disaster Management</p>
+  <div id="map" style="width:100%;height:300px;border-radius:8px;margin-bottom:15px;"></div>
 
   <div id="log"></div>
 
-  <script>
-    const channel = new BroadcastChannel("emergency_channel");
+ <script>
+  const channel = new BroadcastChannel("emergency_channel");
 
-    channel.onmessage = (event) => {
-      const d = event.data;
+  let map;
+  let marker;
+  let mapStarted = false;
 
-      document.getElementById("log").innerHTML += `
-        <div style="border:1px solid #334155;padding:10px;margin:10px;border-radius:8px">
-          <b>🚨 Emergency:</b> ${d.emergencyType}<br>
-          <b>👤 Name:</b> ${d.name}<br>
-          <b>📍 Location:</b> ${d.location}<br>
-          <b>🎂 Age:</b> ${d.age}<br>
-          <b>🩺 Medical:</b> ${d.medical || "None"}<br>
+  function initMap(lat, lon) {
+    map = L.map("map").setView([lat, lon], 16);
 
-          <b>⚠️ Risk Score:</b> ${d.riskScore}<br>
-          <b>🕒 Time:</b> ${d.time}
-        </div>
-      `;
-    };
-  </script>
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap"
+    }).addTo(map);
+
+    marker = L.marker([lat, lon]).addTo(map)
+      .bindPopup("Live Location")
+      .openPopup();
+
+    mapStarted = true;
+  }
+
+  function updateLocation(lat, lon) {
+    marker.setLatLng([lat, lon]);
+    map.setView([lat, lon]);
+  }
+
+
+channel.onmessage = (event) => {
+  const d = event.data;
+
+  // 🚨 QUICK REPORT FROM BYSTANDER
+  if (d.type === "QUICK_REPORT") {
+    const parts = d.location.match(/Lat ([\d.-]+), Lon ([\d.-]+)/);
+    if (!parts) return;
+
+    const lat = parseFloat(parts[1]);
+    const lon = parseFloat(parts[2]);
+
+    if (!mapStarted) initMap(lat, lon);
+
+    L.marker([lat, lon]).addTo(map)
+      .bindPopup(`🚨 ${d.emergencyType}`)
+      .openPopup();
+
+    document.getElementById("log").innerHTML += `
+      <div style="border:1px solid #334155;padding:10px;margin:10px;border-radius:8px">
+        <b>🚨 Emergency:</b> ${d.emergencyType}<br>
+        <b>📍 Location:</b> ${d.location}<br>
+        <b>🕒 Time:</b> ${d.time}
+      </div>
+    `;
+    return;
+  }
+
+  // 🟢 LIVE LOCATION UPDATE
+  if (d.type === "LIVE_UPDATE") {
+    if (!mapStarted) return;
+
+    const parts = d.location.match(/Lat ([\d.-]+), Lon ([\d.-]+)/);
+    if (!parts) return;
+
+    updateLocation(parseFloat(parts[1]), parseFloat(parts[2]));
+    return;
+  }
+
+  // 🔴 NORMAL USER EMERGENCY
+  const parts = d.location.match(/Lat ([\d.-]+), Lon ([\d.-]+)/);
+  if (!parts) return;
+
+  const lat = parseFloat(parts[1]);
+  const lon = parseFloat(parts[2]);
+
+  if (!mapStarted) initMap(lat, lon);
+
+  document.getElementById("log").innerHTML += `
+    <div style="border:1px solid #334155;padding:10px;margin:10px;border-radius:8px">
+      <b>🚨 Emergency:</b> ${d.emergencyType}<br>
+      <b>👤 Name:</b> ${d.name}<br>
+      <b>🎂 Age:</b> ${d.age}<br>
+      <b>🩺 Medical:</b> ${d.medical || "None"}<br>
+      <b>⚠️ Risk Score:</b> ${d.riskScore}<br>
+      <b>🕒 Time:</b> ${d.time}
+    </div>
+  `;
+};
+
+</script>
+
+
 
 </body>
 </html>

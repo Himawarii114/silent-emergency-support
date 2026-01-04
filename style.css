@@ -133,3 +133,15 @@ button {
 .overlay.hidden {
   pointer-events: none;
 }
+/* 🔕 Silent Mode (Demo / UI simulation) */
+body.silent-mode {
+  filter: brightness(0.55);
+}
+
+body.silent-mode .cloud {
+  opacity: 0.5;
+}
+
+body.silent-mode .status {
+  color: #94a3b8;
+}

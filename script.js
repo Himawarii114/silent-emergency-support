@@ -1,7 +1,13 @@
+let liveWatcherId = null;
+let quickAuthority = null;
 let activeEmergencies = new Set();
 let emergencySent = false;
 let lockedLocation = null;
 let lastSentCategory = null;
+let guidanceMode = false;
+let lockedCategory = null;
+let pendingPhoto = null;
+let photoIntent = null; // "self" | "other"
 
 // STORE USER PROFILE (GLOBAL)
 let userProfile = {
@@ -18,6 +24,16 @@ const EMERGENCY_PRIORITY = {
   "Disaster Management": 3,
   "Police": 4
 };
+function show(id) {
+  document.querySelectorAll(".screen").forEach(screen => {
+    screen.classList.add("hidden");
+  });
+
+  const el = document.getElementById(id);
+  if (el) {
+    el.classList.remove("hidden");
+  }
+}
 
 function getLiveLocation(callback) {
   if (!navigator.geolocation) {
@@ -41,10 +57,7 @@ const authorityChannel = new BroadcastChannel("emergency_channel");
  const RESPONSE_DELAY = 800; // ms
 const AUTO_SEND_TIMEOUT = 60000; // 1 minute
 
-function show(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
-  document.getElementById(id).classList.remove('hidden');
-}
+
 
 function verifyOTP() {
   const otp = document.getElementById("otp").value;
@@ -86,7 +99,46 @@ function sendMessage() {
   if (!text) return;
 
   addMessage(text, "user");
-  input.value = "";
+input.value = "";
+
+// 🚨 EXPLICIT OVERRIDE (works even during emergency)
+if (isExplicitCall(text)) {
+
+  if (text.includes("police")) {
+    currentCategory = "Police";
+  }
+  else if (text.includes("ambulance") || text.includes("doctor")) {
+    currentCategory = "Medical Emergency";
+  }
+  else if (text.includes("fire")) {
+    currentCategory = "Fire Service";
+  }
+  else {
+    currentCategory = "Emergency";
+  }
+
+  // 🔒 VERY IMPORTANT: lock the category
+  lockedCategory = currentCategory;
+
+  respond("🚨 Sending your details now.");
+  confirmEmergency(); // immediate send
+  return;
+}
+
+
+// 🔒 Emergency already active → guidance only
+if (guidanceMode) {
+  respond(getAdaptiveResponse(text));
+  giveGuidance(lockedCategory);
+  return;
+}
+// 😌 USER CALMS DOWN
+if (isCalmStatement(text) && !emergencyActive) {
+  reduceRisk();
+  respond("Okay. I’m glad you’re safe. I’m here if you need anything.");
+  return;
+}
+
 
   // ✅ RESET
   if (isReset(text)) {
@@ -94,74 +146,7 @@ function sendMessage() {
     return;
   }
 
-  // ===============================
-  // EXPLICIT AUTHORITY REQUESTS
-  // ===============================
 
-  // 🔥 FIRE
-  if (
-    text.includes("call fire") ||
-    text.includes("fire brigade") ||
-    text.includes("call fire service")
-  ) {
-    respond("I understand. I’m contacting the fire service now.");
-
-    if (currentCategory !== "Fire Service") {
-      emergencyActive = false;
-      addRisk(100, "Fire Service");
-      openConfirm(true);
-    }
-    return;
-  }
-
-  // 🚑 MEDICAL
-  if (
-    text.includes("call ambulance") ||
-    text.includes("send ambulance") ||
-    text.includes("medical emergency") ||
-    text.includes("medical help") ||
-    text.includes("call doctor")
-  ) {
-    respond("I understand. I’m contacting medical emergency services now.");
-
-    if (currentCategory !== "Medical Emergency") {
-      emergencyActive = false;
-      addRisk(100, "Medical Emergency");
-      openConfirm(true);
-    }
-    return;
-  }
-
-  // 🚓 POLICE
-  if (
-    text.includes("call police") ||
-    text.includes("police help") ||
-    text.includes("contact police")
-  ) {
-    respond("I understand. I’m contacting the police now.");
-
-    if (currentCategory !== "Police") {
-      emergencyActive = false;
-      addRisk(100, "Police");
-      openConfirm(true);
-    }
-    return;
-  }
-
-  // 🌊 DISASTER MANAGEMENT
-  if (
-    text.includes("disaster management") ||
-    text.includes("call disaster")
-  ) {
-    respond("I understand. I’m contacting disaster management services now.");
-
-    if (currentCategory !== "Disaster Management") {
-      emergencyActive = false;
-      addRisk(100, "Disaster Management");
-      openConfirm(true);
-    }
-    return;
-  }
 
   // ===============================
   // NORMAL FLOW
@@ -169,6 +154,9 @@ function sendMessage() {
   increaseRisk(text);
   healthInstructions(text);
   disasterAwareness(text);
+  if (!emergencyActive && shouldEnableSilentMode(currentCategory)) {
+  enableSilentModeUI();
+}
 
   updateUI();
   setTimeout(empatheticResponse, RESPONSE_DELAY);
@@ -176,28 +164,40 @@ function sendMessage() {
   if (riskScore >= THRESHOLD && !emergencyActive) {
     openConfirm(true);
   }
+  updateUI();
+
 }
 
 
 
 /* RISK */
 function increaseRisk(t) {
-  if (t.includes("fire") || t.includes("burning")) {
+  if (t.includes("fire") 
+    || t.includes("burning")
+    || t.includes("flames")
+    || t.includes("smoke")) {
     addRisk(50, "Fire Service");
   }
-  else if (t.includes("bleeding") || t.includes("injured")) {
-    addRisk(40, "Medical Emergency");
+  else if (
+  t.includes("bleeding") ||
+  t.includes("blood") ||
+  t.includes("cut") ||
+  t.includes("wound") ||
+  t.includes("injured") ||
+  t.includes("hurt")
+) {
+    addRisk(15, "Medical Emergency");
   }
-  else if (t.includes("earthquake") || t.includes("flood") || t.includes("tsunami")) {
+  else if (t.includes("earthquake") || t.includes("flood") || t.includes("tsunami")|| t.includes("cyclone")|| t.includes("landslide")) {
     addRisk(35, "Disaster Management");
   }
-  else if (t.includes("kidnap") || t.includes("attack")) {
+  else if (t.includes("kidnap") || t.includes("attack")|| t.includes("fighting")|| t.includes("threat")|| t.includes("stalking")|| t.includes("robbery")|| t.includes("afraid")|| t.includes("scared")) {
     addRisk(45, "Police");
   }
   else if (t.includes("help") || t.includes("scared")) {
-  riskScore += 10;
-  respond("I’m here with you. Tell me what’s happening.");
+  respond("I’m here with you. Stay calm. You are not alone.");
 }
+
 
   else {
     riskScore += 5;
@@ -206,12 +206,11 @@ function increaseRisk(t) {
 
 
 function addRisk(val, cat) {
-  riskScore += val;
+ if (emergencyActive) return; 
 
-  // Add to active emergencies
+  riskScore += val;
   activeEmergencies.add(cat);
 
-  // Pick highest priority emergency
   let sorted = [...activeEmergencies].sort(
     (a, b) => EMERGENCY_PRIORITY[a] - EMERGENCY_PRIORITY[b]
   );
@@ -219,10 +218,41 @@ function addRisk(val, cat) {
   currentCategory = sorted[0];
 }
 
+function reduceRisk() {
+  if (riskScore < THRESHOLD  && currentCategory !== "Police") {
+  disableSilentModeUI();
+}
+
+  if (emergencyActive) return; // 🚫 never reduce after SOS
+
+  riskScore = Math.max(0, riskScore - 15);
+
+  if (riskScore === 0) {
+    currentCategory = null;
+  }
+
+  updateUI();
+}
+
 
 /* RESET */
 function isReset(t) {
   return ["i am fine","i'm fine","i don't need help","perfectly alright","i am okay"].some(p => t.includes(p));
+}
+function isCalmStatement(text) {
+  return (
+    text.includes("i am fine") ||
+    text.includes("i'm fine") ||
+    text.includes("i am okay") ||
+    text.includes("i'm okay") ||
+    text.includes("i feel safe") ||
+    text.includes("everything is okay") ||
+    text.includes("nothing happened")
+  );
+}
+
+function shouldEnableSilentMode(category) {
+  return category === "Police";
 }
 
 function resetSystem(msg) {
@@ -235,6 +265,13 @@ function resetSystem(msg) {
   closeConfirm();
   setState("🙂", "SAFE MODE");
   addMessage(msg, "bot");
+  if (liveWatcherId !== null) {
+  navigator.geolocation.clearWatch(liveWatcherId);
+  liveWatcherId = null;
+  disableSilentModeUI();
+
+}
+
 }
 
 
@@ -252,25 +289,59 @@ function setState(emoji,text) {
 
 /* CONFIRM */
 function openConfirm(forceSend = false) {
+  lockedCategory = currentCategory;
 
-  emergencyActive = true;
+  confirmVisible = true;        // 👈 keep asking permission
+  // ❌ DO NOT set emergencyActive here
 
   const box = document.getElementById("confirmBox");
   document.getElementById("confirmText").innerText =
     `Send location and details to ${currentCategory || "emergency contacts"}?`;
 
-  box.style.display = "flex";        // 👈 show explicitly
+  box.style.display = "flex";
   box.classList.remove("hidden");
 
   confirmTimer = setTimeout(
-  forceSend ? confirmEmergency : closeConfirm,
-  AUTO_SEND_TIMEOUT
-);
+    forceSend ? confirmEmergency : closeConfirm,
+    AUTO_SEND_TIMEOUT
+  );
+}
 
+
+
+function startLiveLocation() {
+  if (!navigator.geolocation) return;
+
+  liveWatcherId = navigator.geolocation.watchPosition(
+    pos => {
+      const lat = pos.coords.latitude.toFixed(5);
+      const lon = pos.coords.longitude.toFixed(5);
+      const updatedLocation = `Lat ${lat}, Lon ${lon}`;
+
+      // send update to authority dashboard
+      authorityChannel.postMessage({
+        type: "LIVE_UPDATE",
+        location: updatedLocation,
+        time: new Date().toLocaleString()
+      });
+    },
+    () => {},
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+  );
 }
 
 
 function confirmEmergency() {
+  emergencyActive = true; // lock only when actually sending
+confirmVisible = false;
+if (!userProfile.name || !userProfile.age) {
+  respond("Please complete your details before I contact authorities.");
+  return;
+}
+if (shouldEnableSilentMode(lockedCategory)) {
+  enableSilentModeUI();
+}
+
   // ❌ Block only SAME emergency repetition
   if (emergencySent && currentCategory === lastSentCategory) {
     respond("Emergency services are already notified. I’m staying with you.");
@@ -279,11 +350,17 @@ function confirmEmergency() {
 
   emergencySent = true;
   lastSentCategory = currentCategory;
+  guidanceMode = true; // 🔒 lock emergency system
+  if (lockedCategory === "Police") {
+  enableSilentModeUI();
+}
+
+  startLiveLocation();
 
   clearTimeout(confirmTimer);
   closeConfirm();
   setState("😨", "EMERGENCY SENT");
-
+  
   getLiveLocation(location => {
     // 🔐 Lock first valid location
     if (!lockedLocation && location !== "Location unavailable") {
@@ -294,16 +371,19 @@ function confirmEmergency() {
       name: userProfile.name,
       age: userProfile.age,
       medical: userProfile.medical,
-      emergencyType: currentCategory,   // ✅ REAL CATEGORY
+      emergencyType: lockedCategory,   // ✅ REAL CATEGORY
       riskScore: riskScore,
       location: lockedLocation || location || "Location pending",
-      time: new Date().toLocaleString()
+      time: new Date().toLocaleString(),
+      photoAttached: pendingPhoto ? true : false,
+      photo: pendingPhoto || null
+
     };
 
     authorityChannel.postMessage(payload);
 
     addMessage(
-      `🚨 SOS SENT\n📍 ${payload.location}\n⚠️ ${currentCategory}`,
+      `🚨 SOS SENT\n📍 ${payload.location}\n⚠️ ${lockedCategory}`,
       "bot"
     );
 
@@ -396,7 +476,7 @@ function healthInstructions(text) {
       addRisk(20, "Medical Emergency");
     }
   } else {
-    addRisk(40, "Medical Emergency");
+    addRisk(20, "Medical Emergency");
     respond("If possible, apply pressure and stay still.");
   }
 }
@@ -485,6 +565,57 @@ function validateEmergencyContacts() {
 function respond(message) {
   addMessage(message, "bot");
 }
+function giveGuidance(category) {
+  if (category === "Medical Emergency") {
+    respond("🩺 If bleeding, apply gentle pressure. Stay still if possible.");
+  }
+  else if (category === "Fire Service") {
+    respond("🔥 Stay low to avoid smoke. Move away from flames.");
+  }
+  else if (category === "Police") {
+    respond("🚓 Stay in a safe place. Avoid confrontation.");
+  }
+  else if (category === "Disaster Management") {
+    respond("🌊 Move to a safer area if possible. Stay alert.");
+  }
+}
+function getAdaptiveResponse(text) {
+  text = text.toLowerCase();
+
+  // AFTER SOS IS SENT
+  if (emergencyActive) {
+    if (lockedCategory === "Fire Service") {
+      return "🚨 Emergency services are on the way. Move away from flames if you can and follow fire safety instructions nearby.";
+    }
+
+    if (lockedCategory === "Medical Emergency") {
+      return "🚨 Help is on the way. Stay still if possible and keep yourself safe. I’m here with you.";
+    }
+
+    if (lockedCategory === "Police") {
+      return "🚨 Authorities are on the way. Stay calm and avoid confrontation if possible.";
+    }
+
+    return "🚨 Emergency help is on the way. Stay safe and keep updating me.";
+  }
+
+  // BEFORE SOS (monitoring phase)
+  if (text.includes("bleeding")) {
+    return "I’m concerned about your condition. Can you tell me how serious the bleeding is?";
+  }
+
+  if (text.includes("fire")) {
+    return "That sounds dangerous. Are you inside a building or outside right now?";
+  }
+
+  if (text.includes("help") || text.includes("scared")) {
+    return "I’m here with you. Take a slow breath and tell me what’s happening.";
+  }
+
+  // DEFAULT
+  return "I’m listening. Please tell me more so I can help you better.";
+}
+
 document.getElementById("chatInput").addEventListener("keydown", function (e) {
   if (e.key === "Enter") {
     e.preventDefault();
@@ -501,3 +632,150 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+function decidePriority(text) {
+  if (text.includes("fire") || text.includes("smoke") || text.includes("burning")) {
+    return "Fire Service";
+  }
+
+  if (
+    text.includes("earthquake") ||
+    text.includes("flood") ||
+    text.includes("cyclone")
+  ) {
+    return "Disaster Management";
+  }
+
+  if (
+    text.includes("attack") ||
+    text.includes("stalking") ||
+    text.includes("kidnap")
+  ) {
+    return "Police";
+  }
+
+  if (
+    text.includes("bleeding") ||
+    text.includes("blood") ||
+    text.includes("injured") ||
+    text.includes("dizzy")
+  ) {
+    return "Medical Emergency";
+  }
+
+  return null;
+}
+function isExplicitCall(text) {
+  return (
+    text.includes("call police") ||
+    text.includes("call ambulance") ||
+    text.includes("call fire") ||
+    text.includes("fire brigade")
+  );
+}
+function detectExplicitCategory(text) {
+  if (text.includes("police")) return "Police";
+  if (text.includes("ambulance") || text.includes("doctor")) return "Medical Emergency";
+  if (text.includes("fire")) return "Fire Service";
+  return "Emergency";
+}
+
+function openUserCamera() {
+  photoIntent = "self";
+  document.getElementById("quickPhoto").click();
+}
+
+// 🟥 Open camera
+
+
+// 🟥 After photo is taken
+function sendQuickReport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  /* ============================
+     CASE 1 — PHOTO FOR SELF
+     ============================ */
+  if (photoIntent === "self") {
+    pendingPhoto = file; // store for later SOS
+
+    // Optional preview in chat (UX)
+    const imgURL = URL.createObjectURL(file);
+    addMessage("📸 Photo captured. It will be sent if SOS is triggered.", "bot");
+    addImageToChat(imgURL);
+
+    photoIntent = null;
+    return;
+  }
+
+  /* ============================
+     CASE 2 — HELPING SOMEONE ELSE
+     ============================ */
+  if (photoIntent === "other") {
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lat = pos.coords.latitude.toFixed(5);
+      const lon = pos.coords.longitude.toFixed(5);
+
+      authorityChannel.postMessage({
+  type: "QUICK_REPORT",
+  emergencyType: quickAuthority,
+  location: `Lat ${lat}, Lon ${lon}`,
+  time: new Date().toLocaleString(),
+  photo: file
+});
+
+
+      quickAuthority = null;
+      photoIntent = null;
+
+      alert("🚨 Emergency reported for someone else.");
+    });
+
+    return;
+  }
+}
+
+
+
+
+function openQuickAuthorityBox() {
+  const box = document.getElementById("quickAuthorityBox");
+  box.style.display = "flex";
+  box.style.pointerEvents = "auto";
+}
+
+
+function closeQuickAuthority() {
+  document.getElementById("quickAuthorityBox").style.display = "none";
+}
+
+function selectQuickAuthority(authority) {
+  quickAuthority = authority;
+  photoIntent = "other";
+  closeQuickAuthority();
+  document.getElementById("quickPhoto").click();
+}
+function enableSilentModeUI() {
+  document.body.classList.add("silent-mode");
+  respond(
+  "🔕 Silent Mode activated. Keep your screen dim and avoid drawing attention."
+);
+
+}
+
+function disableSilentModeUI() {
+  document.body.classList.remove("silent-mode");
+}
+
+function addImageToChat(imageURL) {
+  const img = document.createElement("img");
+  img.src = imageURL;
+  img.style.maxWidth = "100%";
+  img.style.borderRadius = "8px";
+  img.style.marginTop = "6px";
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "message user";
+  wrapper.appendChild(img);
+
+  document.getElementById("chat").appendChild(wrapper);
+}
